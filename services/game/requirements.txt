@@ -1,0 +1,6 @@
+Flask==1.1.1
+inject==3.5.4
+Flask-SocketIO==4.2.1
+boto3==1.10.16
+redis==3.3.11
+eventlet==0.25.1

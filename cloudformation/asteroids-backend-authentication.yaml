@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Asteroids Backend Authentication Layer
+
+Parameters:
+  CognitoDomain:
+    Type: String
+    Description: Enter the cognito domain you wish to use
+
+Resources:
+
+  UserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UserPoolName: AsteroidsUserPool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      UsernameAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          Name: email
+          Required: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: AsteroidUserPoolClient
+      GenerateSecret: false
+      CallbackURLs:
+        - http://localhost
+      LogoutURLs:
+        - http://localhost
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - phone
+        - openid
+        - email
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  UserPoolDomain:
+    Type: "AWS::Cognito::UserPoolDomain"
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Ref CognitoDomain
+
+Outputs:
+  CognitoUserPoolId:
+    Description: "ID of Cognito User Pool"
+    Value:
+      Ref: UserPool
+
+  CognitoUserPoolArn:
+    Description: "Congnito User Pool Arn"
+    Value: !GetAtt UserPool.Arn
+    Export: 
+      Name: !Sub "${AWS::StackName}-UserPoolARN"
+
+  CognitoClient:
+    Description: "Cognito Client ID"
+    Value:
+      Ref: UserPoolClient

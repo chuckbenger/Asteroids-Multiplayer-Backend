@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.mypy_cache/
+*.py[cod]
+venv/
+.pytest_cache/
+.aws/
+.aws/
+.vs_code
+*.env
+event.json
+WHEEL
+**/python/
+*.redis
+.DS_Store
+settings.json
+tasks.json

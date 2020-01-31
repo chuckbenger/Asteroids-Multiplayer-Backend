@@ -1,0 +1,6 @@
+{
+  "AddGameQueueLambda": {
+    "MATCH_MAKING_QUEUE_NAME": "MatchMakingQueue",
+    "CUSTOM_CONTEXT": "{\"resourceId\":\"5l1g34\",\"authorizer\":{\"claims\":{\"sub\":\"df4be384-8835-4354-a7bb-65b27f79bde5\",\"aud\":\"4da8ma0oo1j5lqismq9irkffko\",\"email_verified\":\"true\",\"event_id\":\"3c31b6c7-b03e-42b7-86e7-d0cfdad0f1b4\",\"token_use\":\"id\",\"auth_time\":\"1574220745\",\"iss\":\"https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_R5ill53eg\",\"cognito:username\":\"df4be384-8835-4354-a7bb-65b27f79bde5\",\"exp\":\"Wed Nov 20 04:32:25 UTC 2019\",\"iat\":\"Wed Nov 20 03:32:25 UTC 2019\",\"email\":\"chuckbenger@gmail.com\"}}}"
+  }
+}

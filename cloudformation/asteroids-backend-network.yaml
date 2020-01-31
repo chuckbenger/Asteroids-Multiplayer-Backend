@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Asteroids Network Backend
+
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: 10.0.0.0/16
+    PublicSubnetA:
+      CIDR: 10.0.0.0/24
+    PublicSubnetB:
+      CIDR: 10.0.1.0/24
+    PrivateSubnetA:
+      CIDR: 10.0.3.0/24
+    PrivateSubnetB:
+      CIDR: 10.0.4.0/24
+
+Resources:
+  AsteroidsVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap ["SubnetConfig", "VPC", "CIDR"]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "VPC"
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ""
+        - - !Ref AWS::Region
+          - "a"
+      VpcId: !Ref AsteroidsVPC
+      CidrBlock: !FindInMap ["SubnetConfig", "PublicSubnetA", "CIDR"]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PublicSubnetA"
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ""
+        - - !Ref AWS::Region
+          - "b"
+      VpcId: !Ref AsteroidsVPC
+      CidrBlock: !FindInMap ["SubnetConfig", "PublicSubnetB", "CIDR"]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PublicSubnetB"
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ""
+        - - !Ref AWS::Region
+          - "a"
+      VpcId: !Ref AsteroidsVPC
+      CidrBlock: !FindInMap ["SubnetConfig", "PrivateSubnetA", "CIDR"]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PrivateSubnetA"
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ""
+        - - !Ref AWS::Region
+          - "b"
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref AsteroidsVPC
+      CidrBlock: !FindInMap ["SubnetConfig", "PrivateSubnetB", "CIDR"]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PrivateSubnetB"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "IGW"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AsteroidsVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AsteroidsVPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PublicRouteTable"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AsteroidsVPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PrivateRouteTable"
+
+  PrivateRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+  
+
+Outputs:
+  VPC:
+    Description: "Asteroids VPC"
+    Value:
+      Ref: AsteroidsVPC

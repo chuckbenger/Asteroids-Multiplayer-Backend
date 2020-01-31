@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Asteroids Backend Application Layer
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  AuthenticationStackName:
+    Description: Name of the authentication stack
+    Type: String
+Resources:
+  MatchMakingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MatchMakingQueue
+      MessageRetentionPeriod: 900
+      ReceiveMessageWaitTimeSeconds: 20
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - '-'
+          - - Ref: AWS::StackName
+            - MatchMakingQueue
+  AsteroidsAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors: '''*'''
+      Auth:
+        DefaultAuthorizer: MyCognitoAuthorizer
+        Authorizers:
+          MyCognitoAuthorizer:
+            UserPoolArn:
+              Fn::ImportValue:
+                Fn::Sub: ${AuthenticationStackName}-UserPoolARN
+  AddGameQueueLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Layers:
+      - Ref: LambdaVendorLayer
+      Policies:
+        Statement:
+        - Effect: Allow
+          Action:
+          - sqs:*
+          Resource:
+          - Fn::GetAtt:
+            - MatchMakingQueue
+            - Arn
+      Handler: add_player.execute
+      Runtime: python3.7
+      CodeUri: s3://sam.chuckbenger/b95fc29a82855600003d75bb63aa92b7
+      Description: Add player to multiplayer game queue
+      MemorySize: 128
+      Timeout: 30
+      Events:
+        HttpPost:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AsteroidsAPI
+            Path: /game/
+            Method: post
+      Environment:
+        Variables:
+          MATCH_MAKING_QUEUE_NAME:
+            Fn::GetAtt:
+            - MatchMakingQueue
+            - QueueName
+  LambdaVendorLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+      - python3.7
+      LayerName: VendorLayer
+      Content:
+        S3Bucket: sam.chuckbenger
+        S3Key: 8f613efe3f57fbc88720aa984f3da888
+  ContainerRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: asteroids-repository
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowPushPull
+          Effect: Allow
+          Principal:
+            AWS:
+            - '*'
+          Action:
+          - ecr:GetDownloadUrlForLayer
+          - ecr:BatchGetImage
+          - ecr:BatchCheckLayerAvailability
+          - ecr:PutImage
+          - ecr:InitiateLayerUpload
+          - ecr:UploadLayerPart
+          - ecr:CompleteLayerUpload
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - '-'
+          - - Ref: AWS::StackName
+            - ECR
+  GameCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: AsteroidsGameCluster
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - '-'
+          - - Ref: AWS::StackName
+            - ECSCluster
+  LogicalID:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+      - Name: fargate-app
+        Image: httpd:2.4
+        PortMappings:
+        - ContainerPort: 80
+          HostPort: 80
+          Protocol: tcp
+        Essential: true
+        EntryPoint:
+        - sh
+        - -c
+        Command:
+        - '/bin/sh -c "echo ''<html> <head> <title>Amazon ECS Sample App</title> <style>body
+          {margin-top: 40px; background-color: #333;} </style> </head><body> <div
+          style=color:white;text-align:center> <h1>Amazon ECS Sample App</h1> <h2>Congratulations!</h2>
+          <p>Your application is now running on a container in Amazon ECS.</p> </div></body></html>''
+          >  /usr/local/apache2/htdocs/index.html && httpd-foreground"'
+      Cpu: 256
+      Family: sample-fargate
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+Outputs:
+  MatchMakingQueueURL:
+    Description: MatchMaking Queue URL
+    Value:
+      Ref: MatchMakingQueue
