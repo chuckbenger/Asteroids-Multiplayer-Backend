@@ -1,7 +1,11 @@
 import logging
+import time
+import threading
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room, send
 from configure import get_configuration, configure_inject
+from server.game_server import GameServerNamespace
+# from game_room import GameRoom
 
 app = Flask(__name__)
 conf = get_configuration()
@@ -17,39 +21,39 @@ app.config['SECRET_KEY'] = conf.game_secret
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 
-@app.route('/')
-def sessions():
-    return render_template('session.html')
+# @socketio.on('connect')
+# def test_connect():
+#     print("CONNECTION")
+#     socketio.emit('player_update', {'data': 'Connected'})
 
 
-@socketio.on('connect')
-def test_connect():
-    print("CONNECTION")
-    socketio.emit('player_update', {'data': 'Connected'})
+# @socketio.on('join')
+# def on_join(data):
+#     game_id = data['game_id']
+
+#     join_room(game_id)
+
+#     print(data)
+
+#     socketio.emit('data', data, room=game_id)
 
 
-@socketio.on('join')
-def on_join(data):
-    # username = data['username']
-    game = data['game']
-    join_room(game)
-    print(f"has joined the room")
+# @socketio.on('leave')
+# def on_leave(data):
+#     game_id = data['game_id']
+#     leave_room(game_id)
+#     socketio.emit('data', data, room=game_id)
 
 
-@socketio.on('leave')
-def on_leave(data):
-    # username = data['username']
-    game = data['game']
-    leave_room(game)
-    print(f"has left the room")
+# @socketio.on('data')
+# def handle_my_custom_event(data):
+#     print('received my event: ', data, type(data))
+#     game_id = data['game_id']
 
-
-@socketio.on('my event')
-def handle_my_custom_event(json):
-    print('received my event: ', json, type(json))
-    # game = json['game']
-    socketio.emit('my event', json)
+#     socketio.emit('data', data, room=game_id)
 
 
 if __name__ == "__main__":
+
+    socketio.on_namespace(GameServerNamespace('/'))
     socketio.run(app, debug=True, host='0.0.0.0')
