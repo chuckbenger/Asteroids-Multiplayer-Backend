@@ -5,6 +5,7 @@ from flask_socketio import emit
 from server.packets.game_join import GameJoinPacket
 from server.packets.game_left import GameLeftPacket
 from server.packets.game_init import GameInitPacket
+from server import GameRoomMessenger, GameMessage
 
 
 class Asteroid:
@@ -68,7 +69,7 @@ class GameRoom():
     def _setup_new_player(self) -> None:
         for player in self.players.keys():
             self._send_self(GameJoinPacket(player, self.game_id).encode())
-    
+
     def remove_player(self, player_id: str) -> None:
         del self.players[player_id]
         self._notify_player_left(player_id)
@@ -79,11 +80,6 @@ class GameRoom():
     def initialize_game(self) -> None:
         self._send_room(GameInitPacket(self.asteroids).encode())
 
-    def handle_message(self, message: Dict, from_player_id: str) -> None:
-        self._send_room(message)
-
-    def _send_room(self, message: Dict) -> None:
-        emit('data', message, room=self.game_id)
-
-    def _send_self(self, message: Dict) -> None:
-        emit('data', message)
+    def handle_message(self, message: GameMessage,
+                       messenger: GameRoomMessenger) -> None:
+        messenger.send_game_room(message)

@@ -1,56 +1,93 @@
-from typing import Dict, Union
+from dataclasses import dataclass
+from typing import Dict, Union, Optional
 from flask import session
-from flask_socketio import Namespace, join_room, leave_room
-from server.game_room import GameRoom
+from flask_socketio import Namespace, join_room, leave_room, emit
+
+from server.game_rooms import GameRooms
+from server import GameRoomMessenger, GameMessage
+from server.packets.packet import Packet
+
+
+class WebSocketMessenger(GameRoomMessenger):
+
+    def send_game_room(self, message: GameMessage) -> None:
+        payload = self._get_message_payload(message)
+        emit('data', payload, room=message.game_id)
+
+    def send_player(self, message: GameMessage) -> None:
+        payload = self._get_message_payload(message)
+        emit('data', payload)
+
+    def _get_message_payload(self, message: GameMessage) -> Dict:
+        if isinstance(message.message, Packet):
+            return message.message.encode()
+        else:
+            return message.message
+
+
+@dataclass(frozen=True)
+class GameIdentity:
+    player_id: str
+    game_id: str
 
 
 class GameServerNamespace(Namespace):
 
     def __init__(self, namespace):
         Namespace.__init__(self, namespace)
-        self.game_rooms: Dict[str, GameRoom] = {}
+        self.messenger = WebSocketMessenger()
+        self.game_rooms = GameRooms(self.messenger)
 
-    def on_join(self, message: Dict):
-        game_id = message['game_id']
-        player_id = message['player_id']
+    def on_join(self, data: Dict):
+        identity = GameIdentity(data['player_id'], data['game_id'])
+        self._save_identity(identity)
 
-        game = self.get_game_room(game_id)
-        if not game:
-            game = self.create_game_room(game_id)
+        if not self.game_rooms.game_exists(identity.game_id):
+            self.game_rooms.create_game_room(identity.game_id)
 
-        game.add_player(player_id)
-        join_room(game_id)
-        game.initialize_game()
-        session['game_id'] = game_id
-        session['player_id'] = player_id
+        join_room(identity.game_id)
 
-    def on_leave(self, message: Dict):
-        game_id = session['game_id']
-        player_id = session['player_id']
-        game = self.get_game_room(game_id)
+        message = self._build_message(data)
+        self.game_rooms.handle_message(message)
 
-        if game:
-            game.remove_player(player_id)
-        leave_room(game_id)
+    def on_leave(self, data: Dict):
+        message = self._build_message(data)
+
+        if message:
+            leave_room(message.game_id)
+            self._clear_identity()
+            self.game_rooms.handle_message(message)
+
+    def on_data(self, data: Dict):
+        message = self._build_message(data)
+        
+        if message:
+            self.game_rooms.handle_message(message)
+
+    def _build_message(self, m: Union[Dict, Packet]) -> Optional[GameMessage]:
+        identity = self._get_identity()
+        if not identity:
+            return None
+
+        return GameMessage(
+            message=m,
+            player_id=identity.player_id,
+            game_id=identity.game_id
+        )
+
+    def _get_identity(self) -> Optional[GameIdentity]:
+        if session['player_id'] is None or session['game_id'] is None:
+            return None
+
+        return GameIdentity(
+            player_id=session['player_id'],
+            game_id=session['game_id']
+        )
+
+    def _save_identity(self, identity: GameIdentity) -> None:
+        session['game_id'] = identity.game_id
+        session['player_id'] = identity.player_id
+
+    def _clear_identity(self) -> None:
         session['game_id'] = None
         session['player_id'] = None
-
-    def on_data(self, message: Dict):
-        game_id = session["game_id"]
-        player_id = session["player_id"]
-
-        if game_id and player_id:
-            self.handle_game_message(message, game_id, player_id)
-
-    def handle_game_message(self, message: Dict, game_id: str, player_id: str):
-        game = self.get_game_room(game_id)
-        if game:
-            game.handle_message(message, player_id)
-
-    def create_game_room(self, game_id: str) -> GameRoom:
-        game_room = GameRoom(game_id)
-        self.game_rooms[game_id] = game_room
-        return game_room
-
-    def get_game_room(self, game_id: str) -> Union[None, GameRoom]:
-        return self.game_rooms.get(game_id)
