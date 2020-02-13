@@ -8,7 +8,7 @@ from server.packets.packet import Packet
 
 @dataclass(frozen=True)
 class GameMessage:
-    message: Union[Dict, Packet]
+    message: Packet
     player_id: str
     game_id: str
 
@@ -16,9 +16,10 @@ class GameMessage:
 class GameRoomMessenger(ABC):
 
     @abstractmethod
-    def send_game_room(self, message: GameMessage) -> None:
+    def send_game_room(self, message: Packet, game_id: str) -> None:
         pass
 
     @abstractmethod
-    def send_player(self, message: GameMessage) -> None:
+    def send_player(self, message: Packet) -> None:
         pass
+

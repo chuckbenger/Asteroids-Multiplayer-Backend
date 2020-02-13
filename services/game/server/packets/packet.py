@@ -9,7 +9,7 @@ class Packet:
         }
 
     @staticmethod
-    def decode():
+    def decode(data: Dict):
         pass
 
     @staticmethod

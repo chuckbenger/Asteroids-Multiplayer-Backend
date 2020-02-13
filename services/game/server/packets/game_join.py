@@ -15,5 +15,12 @@ class GameJoinPacket(Packet):
         return packet
 
     @staticmethod
+    def decode(data: Dict) -> Packet:
+        return GameJoinPacket(
+            player_id=data['player_id'],
+            game_id=data['game_id']
+        )
+
+    @staticmethod
     def get_type() -> str:
         return "join_game"

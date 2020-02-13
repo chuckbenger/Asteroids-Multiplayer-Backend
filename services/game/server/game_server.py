@@ -6,23 +6,16 @@ from flask_socketio import Namespace, join_room, leave_room, emit
 from server.game_rooms import GameRooms
 from server import GameRoomMessenger, GameMessage
 from server.packets.packet import Packet
+from server.packets import decode_packet
 
 
 class WebSocketMessenger(GameRoomMessenger):
 
-    def send_game_room(self, message: GameMessage) -> None:
-        payload = self._get_message_payload(message)
-        emit('data', payload, room=message.game_id)
+    def send_game_room(self, message: Packet, game_id: str) -> None:
+        emit('data', message.encode(), room=game_id)
 
-    def send_player(self, message: GameMessage) -> None:
-        payload = self._get_message_payload(message)
-        emit('data', payload)
-
-    def _get_message_payload(self, message: GameMessage) -> Dict:
-        if isinstance(message.message, Packet):
-            return message.message.encode()
-        else:
-            return message.message
+    def send_player(self, message: Packet) -> None:
+        emit('data', message.encode())
 
 
 @dataclass(frozen=True)
@@ -51,29 +44,35 @@ class GameServerNamespace(Namespace):
         self.game_rooms.handle_message(message)
 
     def on_leave(self, data: Dict):
+        identity = self._get_identity()
         message = self._build_message(data)
 
-        if message:
-            leave_room(message.game_id)
+        if message and identity:
+            leave_room(identity.game_id)
             self._clear_identity()
             self.game_rooms.handle_message(message)
 
     def on_data(self, data: Dict):
         message = self._build_message(data)
-        
+
         if message:
             self.game_rooms.handle_message(message)
 
-    def _build_message(self, m: Union[Dict, Packet]) -> Optional[GameMessage]:
+    def _build_message(self, m: Dict) -> Optional[GameMessage]:
         identity = self._get_identity()
         if not identity:
             return None
 
-        return GameMessage(
-            message=m,
-            player_id=identity.player_id,
-            game_id=identity.game_id
-        )
+        decoded = decode_packet(m)
+
+        if decoded:
+            return GameMessage(
+                message=decoded,
+                player_id=identity.player_id,
+                game_id=identity.game_id
+            )
+        else:
+            return None
 
     def _get_identity(self) -> Optional[GameIdentity]:
         if session['player_id'] is None or session['game_id'] is None:
