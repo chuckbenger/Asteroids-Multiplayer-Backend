@@ -47,6 +47,8 @@ class GameServerNamespace(Namespace):
         identity = self._get_identity()
         message = self._build_message(data)
 
+        print("LEAVING GAME")
+
         if message and identity:
             leave_room(identity.game_id)
             self._clear_identity()
@@ -64,7 +66,7 @@ class GameServerNamespace(Namespace):
             return None
 
         decoded = decode_packet(m)
-
+        
         if decoded:
             return GameMessage(
                 message=decoded,

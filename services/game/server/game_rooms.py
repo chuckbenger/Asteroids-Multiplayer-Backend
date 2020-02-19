@@ -23,6 +23,7 @@ class GameRooms:
             return self.get_game_room(game_id)
         else:
             new_game = GameRoom(game_id, self.messenger)
+            new_game.next_level()
             self.game_rooms[game_id] = new_game
             return new_game
 

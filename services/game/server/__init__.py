@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from server.packets.packet import Packet
 
 
+
 @dataclass(frozen=True)
 class GameMessage:
     message: Packet

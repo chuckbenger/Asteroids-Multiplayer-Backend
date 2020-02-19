@@ -9,68 +9,39 @@ from server.packets.game_init import GameInitPacket
 from server.packets.player_position import PlayerPositionPacket
 from server.packets.player_blaster import PlayerBlasterPacket
 from server.packets.asteroid_killed import AsteroidKilledPacket
+from server.packets.player_died import PlayerDiedPacket
+from server.packets.player_respawn import PlayerRespawnPacket
+from server.asteroid import Asteroid, generate_asteroid_field
+from server.player import Player
 from server import GameRoomMessenger, GameMessage
-
-
-class Asteroid:
-    def __init__(self, id, x, y, angle, sides, size, velocity,
-                 rotation_speed, lives):
-        self.id = id
-        self.x = x
-        self.y = y
-        self.angle = angle
-        self.sides = sides
-        self.size = size
-        self.velocity = velocity
-        self.rotiation_speed = rotation_speed
-        self.lives = lives
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "x": self.x,
-            "y": self.y,
-            "angle": self.angle,
-            "sides": self.sides,
-            "size": self.size,
-            "velocity": self.velocity,
-            "rotation_speed": self.rotiation_speed,
-            "lives": self.lives
-        }
-
-
-def generate_asteroid_field() -> List[Asteroid]:
-    asteroids = []
-    for i in range(1):
-        asteroid = Asteroid(
-            id=str(random.randint(1, 999)),
-            x=random.randint(0, 400),
-            y=random.randint(0, 500),
-            angle=random.randint(0, 0),
-            sides=6,
-            size=random.randint(20, 40),
-            velocity=random.randint(1, 3),
-            rotation_speed=random.randint(1, 3),
-            lives=2
-        )
-        asteroids.append(asteroid)
-    return asteroids
 
 
 class GameRoom():
     def __init__(self, game_id: str, messenger: GameRoomMessenger):
         self.game_id = game_id
         self.messenger = messenger
-        self.players: Dict = {}
-        self.asteroids: List = [x.to_dict() for x in generate_asteroid_field()]
+        self.players: Dict[str, Player] = {}
+        self.asteroids: Dict[str, Asteroid] = {}
         self.score = 0
-        self.level = 0
+        self.level = 1
 
     def send_game_room(self, packet: Packet) -> None:
         self.messenger.send_game_room(packet, self.game_id)
 
     def send_player(self, packet: Packet) -> None:
         self.messenger.send_player(packet)
+
+    def next_level(self) -> None:
+        self.level = + 1
+        self.initialize_level()
+
+    def initialize_level(self) -> None:
+        self.generate_asteroid_field()
+        self.send_game_room(GameInitPacket(list(self.asteroids.values())))
+
+    def generate_asteroid_field(self) -> None:
+        asteroids = generate_asteroid_field(random.randint(5, 10 + self.level))
+        self.asteroids = {a.id: a for a in asteroids}
 
     def handle_message(self, message: GameMessage) -> None:
 
@@ -81,11 +52,15 @@ class GameRoom():
             elif isinstance(packet, PlayerBlasterPacket):
                 self._handle_player_blaster_packet(packet)
             elif isinstance(packet, AsteroidKilledPacket):
-                self._handle_asteroid_killed_packet(packet)
+                self._handle_asteroid_killed_packet(packet, message.player_id)
             elif isinstance(packet, GameJoinPacket):
                 self._handle_game_join_packet(packet)
             elif isinstance(packet, GameLeftPacket):
                 self._handle_game_left_packet(packet)
+            elif isinstance(packet, PlayerDiedPacket):
+                self.send_game_room(packet)
+            elif isinstance(packet, PlayerRespawnPacket):
+                self.send_game_room(packet)
 
     def _handle_player_position(self, packet: PlayerPositionPacket) -> None:
         self.send_game_room(packet)
@@ -93,16 +68,29 @@ class GameRoom():
     def _handle_player_blaster_packet(self, packet: PlayerBlasterPacket) -> None:
         self.send_game_room(packet)
 
-    def _handle_asteroid_killed_packet(self, packet: AsteroidKilledPacket) -> None:
+    def _handle_asteroid_killed_packet(self, packet: AsteroidKilledPacket, player_id: str) -> None:
         self.send_game_room(packet)
+
+        player = self.players[player_id]
+        player.score += 100
+        print(player.score)
+
+        del self.asteroids[packet.asteroid_id]
+        if len(self.asteroids.keys()) == 0:
+            self.next_level()
 
     def _handle_game_join_packet(self, packet: GameJoinPacket) -> None:
         self.send_game_room(packet)
-        self.send_player(GameInitPacket(self.asteroids))
-        for player_id, _ in self.players.items():
-            self.send_player(GameJoinPacket(player_id, self.game_id))
+        self.send_player(GameInitPacket(list(self.asteroids.values())))
 
-        self.players[packet.player_id] = True
+        for player_id, player in self.players.items():
+            self.send_player(GameJoinPacket(
+                player_id, self.game_id, player.get_name()))
+
+        player = Player(packet.player_id, packet.player_name)
+        
+        self.players[packet.player_id] = player
+        print(len(self.players), packet)
 
     def _handle_game_left_packet(self, packet: GameLeftPacket) -> None:
         self.send_game_room(packet)
