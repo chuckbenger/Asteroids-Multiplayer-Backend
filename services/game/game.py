@@ -17,7 +17,13 @@ app.config['SECRET_KEY'] = conf.game_secret
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-if __name__ == "__main__":
 
-    socketio.on_namespace(GameServerNamespace('/'))
-    socketio.run(app, debug=True, host='0.0.0.0')
+@app.route('/health_check')
+def health_check():
+    return 'OK'
+
+
+if __name__ == "__main__":
+    print("STARTING UP")
+    socketio.on_namespace(GameServerNamespace('/socket'))
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

@@ -1,7 +1,7 @@
 import boto3
-import logging
+from typing import List
 from common.domain.player import Player
-from common.domain.queue_interface import GameQueueInterface
+from common.domain.game_queue_interface import GameQueueInterface
 
 
 class SQSGameQueueAdapter(GameQueueInterface):
@@ -16,30 +16,36 @@ class SQSGameQueueAdapter(GameQueueInterface):
             MessageAttributes={
                 "user_id": {
                     "DataType": "String",
-                    "StringValue": player.user_id
+                    "StringValue": player.player_id
+                },
+                "user_name": {
+                    "DataType": "String",
+                    "StringValue": player.name
                 }
             },
             MessageBody="Match Making"
         )
         return response and response['MessageId']
 
-    def pop(self, max_size: int = 1) -> [Player]:
+    def pop(self, max_size: int = 1) -> List[Player]:
         messages = self.queue.receive_messages(
-            MessageAttributeNames=['user_id'],
+            MessageAttributeNames=['user_id', 'user_name'],
             MaxNumberOfMessages=max_size,
         )
-        players = set()
+        players: List[Player] = []
 
         for message in messages:
             if message.message_attributes:
-                user_id = message.message_attributes.get(
+                id = message.message_attributes.get(
                     'user_id').get('StringValue')
-                player = Player(user_id)
-                players.add(player)
+                name = message.message_attributes.get(
+                    'user_name').get('StringValue')
+                player = Player(id, name, None)
+                players.append(player)
 
             message.delete()
 
-        return list(players)
+        return players
 
     def size(self) -> int:
         results = self.client.get_queue_attributes(

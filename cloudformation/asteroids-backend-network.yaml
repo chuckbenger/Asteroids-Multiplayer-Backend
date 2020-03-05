@@ -164,10 +164,25 @@ Resources:
     Properties:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTable
-  
 
 Outputs:
   VPC:
     Description: "Asteroids VPC"
     Value:
       Ref: AsteroidsVPC
+  PrivateSubnetA:
+    Description: "PrivateSubnetA"
+    Value:
+      Ref: PrivateSubnetA
+  PrivateSubnetB:
+    Description: "PrivateSubnetB"
+    Value:
+      Ref: PrivateSubnetB
+  PublicSubnetA:
+    Description: "PublicSubnetA"
+    Value:
+      Ref: PublicSubnetA
+  PublicSubnetB:
+    Description: "PublicSubnetB"
+    Value:
+      Ref: PublicSubnetB

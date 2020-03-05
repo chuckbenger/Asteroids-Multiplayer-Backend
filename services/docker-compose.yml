@@ -1,13 +1,13 @@
 version: "3"
 
 services:
-  # match_making:
-  #   build:
-  #     context: ./
-  #     dockerfile: ./matchmaking/Dockerfile
-  #   volumes:
-  #     - ~/.aws/credentials:/root/.aws/credentials:ro
-  #   env_file: ./matchmaking/service.env
+  match_making:
+    build:
+      context: ./
+      dockerfile: ./matchmaking/Dockerfile
+    volumes:
+      - ~/.aws/credentials:/root/.aws/credentials:ro
+    env_file: ./matchmaking/service.env
 
 
   game_service:
@@ -25,9 +25,9 @@ services:
       - 5000:5000
 
 
-  game_cache:
-    ports: 
-      - 6379:6379
-    image: redis:latest
+  # game_cache:
+  #   ports: 
+  #     - 6379:6379
+  #   image: redis:latest
 
 

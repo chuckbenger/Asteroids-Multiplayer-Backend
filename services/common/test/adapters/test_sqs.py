@@ -17,7 +17,7 @@ def aws_credentials():
 @pytest.fixture(scope='function')
 def game_queue(aws_credentials):
     with mock_sqs():
-        from common.adapters.sqs import SQSGameQueueAdapter
+        from common.adapters.sqs_game_queue import SQSGameQueueAdapter
 
         sqs = boto3.resource('sqs',  'ca-central-1')
         sqs.create_queue(QueueName='TestQueue')

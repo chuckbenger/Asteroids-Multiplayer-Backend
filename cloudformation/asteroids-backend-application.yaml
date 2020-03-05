@@ -3,9 +3,15 @@ Description: Asteroids Backend Application Layer
 Transform: AWS::Serverless-2016-10-31
 
 Parameters:
-  AuthenticationStackName:
-    Description: "Name of the authentication stack"
-    Type: String
+  VPC:
+    Description: "VPC"
+    Type: AWS::EC2::VPC::Id
+  PublicSubnets:
+    Description: Public Subnets
+    Type: List<AWS::EC2::Subnet::Id>
+  PrivateSubnets:
+    Description: Private Subnets
+    Type: List<AWS::EC2::Subnet::Id>
 
 Resources:
   MatchMakingQueue:
@@ -21,18 +27,126 @@ Resources:
             - - !Ref AWS::StackName
               - MatchMakingQueue
 
+  # ======= Database ================
+  GameDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: GameID
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "GameID"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: Game
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "GameDynamoTable"
+
+  PlayerGameDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "PlayerID"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "PlayerID"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: GamePlayer
+      TimeToLiveSpecification:
+        AttributeName: "TimeToLive"
+        Enabled: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "PlayerGameDynamoTable"
+
   # ======= Rest API ================
+
+  GameLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: GameLoadBalancerSG
+      GroupDescription: Allow http client traffic to ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "LoadBalancerSG"
+
+  GameServerALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Subnets: !Ref PublicSubnets
+      IpAddressType: ipv4
+      Name: GameServerApplicationLB
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref GameLoadBalancerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "LoadBalancer"
+
+  GameServerLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref GameServerALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: arn:aws:acm:ca-central-1:374494282084:certificate/2ea0bc8b-2f20-42ee-86ad-95fc27a39b56
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GameServerTargetGroup
+
+  GameServerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "GameServerTargetGroup"
+      TargetType: ip
+      VpcId: !Ref VPC
+      Port: 5000
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: 86400 #1 Day
+      HealthCheckEnabled: true
+      HealthCheckPath: "/health_check"
+
   AsteroidsAPI:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
-      Cors: "'*'"
-      Auth:
-        DefaultAuthorizer: MyCognitoAuthorizer
-        Authorizers:
-          MyCognitoAuthorizer:
-            UserPoolArn:
-              Fn::ImportValue: !Sub "${AuthenticationStackName}-UserPoolARN"
+      Cors:
+        AllowMethods: "'POST, GET'"
+        AllowHeaders: "'X-Forwarded-For'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
 
   AddGameQueueLambda:
     Type: "AWS::Serverless::Function"
@@ -68,6 +182,37 @@ Resources:
               - MatchMakingQueue
               - "QueueName"
 
+  GetGameLambda:
+    Type: "AWS::Serverless::Function"
+    Properties:
+      Layers:
+        - !Ref LambdaVendorLayer
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:*
+            Resource:
+              - Fn::GetAtt:
+                  - PlayerGameDynamoTable
+                  - Arn
+      Handler: get_game.execute
+      Runtime: python3.7
+      CodeUri: ../services/lambda/get_game/
+      Description: Get the game id for a player
+      MemorySize: 128
+      Timeout: 30
+      Events:
+        HttpPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AsteroidsAPI
+            Path: "/game/{player_id}"
+            Method: get
+      Environment:
+        Variables:
+          PLAYER_DYNAMO_TABLE_NAME: GamePlayer
+
   LambdaVendorLayer:
     Type: "AWS::Lambda::LayerVersion"
     Properties:
@@ -78,20 +223,137 @@ Resources:
 
   # ECS MicroServices ======================
 
-  ContainerRepo:
+  GameCluster:
+    Type: "AWS::ECS::Cluster"
+    Properties:
+      ClusterName: "AsteroidsGameCluster"
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - ECSCluster
+
+  ECSServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ""
+            Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
+
+  # This is an IAM role which authorizes ECS to manage resources on your
+  # account on your behalf, such as updating your load balancer with the
+  # details of where your containers are, so that traffic can reach your
+  # containers.
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  # Rules which allow ECS to attach network interfaces to instances
+                  # on your behalf in order for awsvpc networking mode to work right
+                  - "ec2:AttachNetworkInterface"
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:CreateNetworkInterfacePermission"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DeleteNetworkInterfacePermission"
+                  - "ec2:Describe*"
+                  - "ec2:DetachNetworkInterface"
+
+                  # Rules which allow ECS to update load balancers on your behalf
+                  # with the information sabout how to send traffic to your containers
+                  - "elasticloadbalancing:DeregisterInstancesFromLoadBalancer"
+                  - "elasticloadbalancing:DeregisterTargets"
+                  - "elasticloadbalancing:Describe*"
+                  - "elasticloadbalancing:RegisterInstancesWithLoadBalancer"
+                  - "elasticloadbalancing:RegisterTargets"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "sqs:DeleteMessage"
+                  - "sqs:GetQueueAttributes"
+                  - "sqs:ReceiveMessage"
+                  - "sqs:GetQueueUrl"
+                  - "sqs:ListQueues"
+                Resource:
+                  - Fn::GetAtt:
+                      - MatchMakingQueue
+                      - Arn
+              - Effect: Allow
+                Action:
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:ListTables"
+                  - "dynamodb:PutItem"
+                Resource:
+                  - Fn::GetAtt:
+                      - GameDynamoTable
+                      - Arn
+                  - Fn::GetAtt:
+                      - PlayerGameDynamoTable
+                      - Arn
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  # Allow the ECS Tasks to download images from ECR
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+
+                  # Allow the ECS tasks to upload logs to CloudWatch
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+
+  # Match Making App
+  MatchMakingContainerRepo:
     Type: "AWS::ECR::Repository"
     Properties:
-      RepositoryName: "asteroids-repository"
+      RepositoryName: "asteroids-matchmaking-repository"
       RepositoryPolicyText:
         Version: "2012-10-17"
-        Statement: 
-          - 
-            Sid: AllowPushPull
+        Statement:
+          - Sid: AllowPushPull
             Effect: Allow
-            Principal: 
-              AWS: 
-                - "*"
-            Action: 
+            Principal:
+              AWS:
+                - "arn:aws:iam::374494282084:user/chuck"
+            Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
               - "ecr:BatchCheckLayerAvailability"
@@ -105,42 +367,195 @@ Resources:
             - "-"
             - - !Ref AWS::StackName
               - ECR
-  
 
-  GameCluster:
-    Type: "AWS::ECS::Cluster"
+  MatchMkaingTaskLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      ClusterName: "AsteroidsGameCluster"
+      RetentionInDays: 1
+      LogGroupName: /ecs/matchmaking-app
+
+  MatchMakingTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Name: "matchmaking-app"
+          Image: 374494282084.dkr.ecr.ca-central-1.amazonaws.com/asteroids-matchmaking-repository:latest
+          Environment:
+            - Name: DEBUG
+              Value: False
+            - Name: SECONDS_BETWEEN_QUEUE_SCANS
+              Value: 30
+            - Name: MAX_GAMES
+              Value: 60
+            - Name: PLAYERS_PER_GAME
+              Value: 2
+            - Name: MATCH_MAKING_QUEUE_NAME
+              Value: MatchMakingQueue
+            - Name: GAME_TABLE
+              Value: Game
+            - Name: PLAYER_TABLE
+              Value: GamePlayer
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/matchmaking-app
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSRole
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
       Tags:
         - Key: Name
           Value: !Join
             - "-"
             - - !Ref AWS::StackName
-              - ECSCluster
+              - ECR
 
-  LogicalID:
+  MatchMakingAppService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref GameCluster
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref PublicSubnets
+      ServiceName: MatchMakingAppService
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - MatchMakingService
+      TaskDefinition: !Ref MatchMakingTaskDefinition
+
+  # Game Service App
+  GameServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: GameAppSG
+      GroupDescription: Allow traffci from ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          SourceSecurityGroupId: !Ref GameLoadBalancerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - GameServerSG
+
+  GameContainerRepo:
+    Type: "AWS::ECR::Repository"
+    Properties:
+      RepositoryName: "asteroids-game-repository"
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - "arn:aws:iam::374494282084:user/chuck"
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - ECR
+
+  GameTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: /ecs/game-app
+
+  GameTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
-        - Name: "fargate-app"
-          Image: httpd:2.4
+        - Name: "game-app"
+          Image: 374494282084.dkr.ecr.ca-central-1.amazonaws.com/asteroids-game-repository:latest
+          Environment:
+            - Name: DEBUG
+              Value: 0
+            - Name: GAME_SECRET
+              Value: SO_SECRET
+            - Name: GAME_DYNAMO_TABLE
+              Value: Game
+            - Name: USE_MEMORY_CACHE
+              Value: 0
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
           PortMappings:
-            - ContainerPort: 80
-              HostPort: 80
+            - ContainerPort: 5000
+              HostPort: 5000
               Protocol: tcp
-          Essential: true
-          EntryPoint:
-            - "sh"
-            - "-c"
-          Command:
-            - '/bin/sh -c "echo ''<html> <head> <title>Amazon ECS Sample App</title> <style>body {margin-top: 40px; background-color: #333;} </style> </head><body> <div style=color:white;text-align:center> <h1>Amazon ECS Sample App</h1> <h2>Congratulations!</h2> <p>Your application is now running on a container in Amazon ECS.</p> </div></body></html>'' >  /usr/local/apache2/htdocs/index.html && httpd-foreground"'
-      Cpu: 256
-      Family: "sample-fargate"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/game-app
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSRole
       Memory: 512
+      Cpu: 256
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-  
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - ECR
+
+  GameAppService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref GameCluster
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      DesiredCount: 1
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: game-app
+          ContainerPort: 5000
+          TargetGroupArn: !Ref GameServerTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref GameServiceSecurityGroup
+          Subnets: !Ref PublicSubnets
+      ServiceName: GameAppService
+      Tags:
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - GameService
+      TaskDefinition: !Ref GameTaskDefinition
 
 Outputs:
   MatchMakingQueueURL:

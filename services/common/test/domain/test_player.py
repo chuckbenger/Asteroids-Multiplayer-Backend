@@ -1,11 +1,11 @@
 import pytest
 import inject
 from unittest.mock import Mock
-from common.domain.queue_interface import GameQueueInterface
+from common.domain.game_queue_interface import GameQueueInterface
 from common.domain.player import Player
-from common.domain.actions.add_player import AddPlayer
-from common.domain.actions.get_players import GetPlayers
-from common.domain.actions.get_players_waiting import GetPlayersWaiting
+from common.domain.actions.add_player_to_queue import AddPlayerToQueue
+from common.domain.actions.get_players_in_queue import GetPlayersInQueue
+from common.domain.actions.get_players_in_queue_waiting import GetPlayersInQueueWaiting
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ class TestPlayer:
     def test_add_player(self, injector, game_queue, player):
         game_queue.push.return_value = True
 
-        result = AddPlayer().execute(player)
+        result = AddPlayerToQueue().execute(player)
 
         assert result == True
         game_queue.push.assert_called_once_with(player)
@@ -37,7 +37,7 @@ class TestPlayer:
     def test_get_players(self, injector, game_queue, player):
         game_queue.pop.return_value = player
 
-        result = GetPlayers().execute(1)
+        result = GetPlayersInQueue().execute(1)
 
         assert result == player
         game_queue.pop.assert_called_once_with(1)
@@ -45,7 +45,7 @@ class TestPlayer:
     def test_get_players_waiting(self, injector, game_queue, player):
         game_queue.size.return_value = 1
 
-        result = GetPlayersWaiting().execute()
+        result = GetPlayersInQueueWaiting().execute()
 
         assert result == 1
         game_queue.size.assert_called_once()

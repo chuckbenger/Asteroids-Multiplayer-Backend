@@ -4,7 +4,7 @@
 # import inject
 # from moto import mock_sqs
 # from matchmaking.matchmaking import MatchMakerApp, MatchMakerConfig, get_configuration
-# from common.domain.queue_interface import GameQueueInterface
+# from common.domain.game_queue_interface import GameQueueInterface
 # from common.domain.player import Player
 
 
@@ -19,7 +19,7 @@
 # @pytest.fixture(scope='function')
 # def game_queue(aws_credentials):
 #     with mock_sqs():
-#         from common.adapters.sqs import SQSGameQueueAdapter
+#         from common.adapters.sqs_game_queue import SQSGameQueueAdapter
 
 #         sqs = boto3.resource('sqs',  'ca-central-1')
 #         sqs.create_queue(QueueName='MyTestQueue')

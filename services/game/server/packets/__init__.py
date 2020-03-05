@@ -3,10 +3,12 @@ from typing import Optional, Dict
 from server.packets.player_position import PlayerPositionPacket
 from server.packets.game_left import GameLeftPacket
 from server.packets.game_join import GameJoinPacket
+from server.packets.game_init import GameInitPacket
 from server.packets.player_blaster import PlayerBlasterPacket
 from server.packets.asteroid_killed import AsteroidKilledPacket
 from server.packets.player_died import PlayerDiedPacket
 from server.packets.player_respawn import PlayerRespawnPacket
+from server.packets.player_stats_update import PlayerStatsUpdatePacket
 from server.packets.packet import Packet
 
 decoders = {}
@@ -17,6 +19,7 @@ decoders[PlayerBlasterPacket.get_type()] = PlayerBlasterPacket.decode
 decoders[AsteroidKilledPacket.get_type()] = AsteroidKilledPacket.decode
 decoders[PlayerDiedPacket.get_type()] = PlayerDiedPacket.decode
 decoders[PlayerRespawnPacket.get_type()] = PlayerRespawnPacket.decode
+decoders[PlayerStatsUpdatePacket.get_type()] = PlayerStatsUpdatePacket.decode
 
 
 def decode_packet(data: Dict) -> Optional[Packet]:

@@ -1,6 +1,14 @@
+import uuid
 from dataclasses import dataclass
+from typing import Optional
 
 
-@dataclass(frozen=True)
+@dataclass
 class Player:
-    user_id: str
+    player_id: str
+    name: str
+    game_id: Optional[str]
+
+
+def create_player(name: str) -> Player:
+    return Player(str(uuid.uuid4()), name, None)

@@ -2,26 +2,30 @@ import random
 from typing import Dict, List
 from flask_socketio import emit
 
-from server.packets.packet import Packet
-from server.packets.game_join import GameJoinPacket
-from server.packets.game_left import GameLeftPacket
-from server.packets.game_init import GameInitPacket
-from server.packets.player_position import PlayerPositionPacket
-from server.packets.player_blaster import PlayerBlasterPacket
-from server.packets.asteroid_killed import AsteroidKilledPacket
-from server.packets.player_died import PlayerDiedPacket
-from server.packets.player_respawn import PlayerRespawnPacket
 from server.asteroid import Asteroid, generate_asteroid_field
 from server.player import Player
 from server import GameRoomMessenger, GameMessage
+from server.packets import Packet, \
+    GameJoinPacket,\
+    GameLeftPacket,\
+    GameInitPacket,\
+    PlayerPositionPacket,\
+    PlayerBlasterPacket,\
+    AsteroidKilledPacket,\
+    PlayerDiedPacket,\
+    PlayerRespawnPacket,\
+    PlayerStatsUpdatePacket
 
 
 class GameRoom():
-    def __init__(self, game_id: str, messenger: GameRoomMessenger):
+    def __init__(self, game_id: str, allowed_players: List[str],
+                 messenger: GameRoomMessenger):
         self.game_id = game_id
         self.messenger = messenger
+        self.allowed_players = allowed_players
         self.players: Dict[str, Player] = {}
         self.asteroids: Dict[str, Asteroid] = {}
+        self.initialized = False
         self.score = 0
         self.level = 1
 
@@ -32,12 +36,27 @@ class GameRoom():
         self.messenger.send_player(packet)
 
     def next_level(self) -> None:
-        self.level = + 1
+        self.level += 1
         self.initialize_level()
 
     def initialize_level(self) -> None:
+        self.initialized = True
         self.generate_asteroid_field()
-        self.send_game_room(GameInitPacket(list(self.asteroids.values())))
+        self.send_game_room(GameInitPacket(
+            list(self.asteroids.values()), self.level))
+
+    def is_ready(self) -> bool:
+        return self.all_players_joined()
+
+    def is_game_ended(self) -> bool:
+        return self.initialized and len(self.players) == 0
+
+    def all_players_joined(self) -> bool:
+        for player in self.allowed_players:
+            if player not in self.players.keys():
+                return False
+
+        return True
 
     def generate_asteroid_field(self) -> None:
         asteroids = generate_asteroid_field(random.randint(5, 10 + self.level))
@@ -56,7 +75,7 @@ class GameRoom():
             elif isinstance(packet, GameJoinPacket):
                 self._handle_game_join_packet(packet)
             elif isinstance(packet, GameLeftPacket):
-                self._handle_game_left_packet(packet)
+                self._handle_game_left_packet(packet, message.player_id)
             elif isinstance(packet, PlayerDiedPacket):
                 self.send_game_room(packet)
             elif isinstance(packet, PlayerRespawnPacket):
@@ -73,7 +92,9 @@ class GameRoom():
 
         player = self.players[player_id]
         player.score += 100
-        print(player.score)
+
+        self.send_game_room(PlayerStatsUpdatePacket(
+            player_id, player.lives, player.score))
 
         del self.asteroids[packet.asteroid_id]
         if len(self.asteroids.keys()) == 0:
@@ -81,16 +102,20 @@ class GameRoom():
 
     def _handle_game_join_packet(self, packet: GameJoinPacket) -> None:
         self.send_game_room(packet)
-        self.send_player(GameInitPacket(list(self.asteroids.values())))
 
         for player_id, player in self.players.items():
             self.send_player(GameJoinPacket(
-                player_id, self.game_id, player.get_name()))
+                player_id, self.game_id, player.get_name(), player.get_color()))
 
-        player = Player(packet.player_id, packet.player_name)
-        
-        self.players[packet.player_id] = player
-        print(len(self.players), packet)
+        player = Player(packet.player_id, packet.player_name, packet.color)
 
-    def _handle_game_left_packet(self, packet: GameLeftPacket) -> None:
+        self.players[packet.player_id]=player
+        for player_id, player in self.players.items():
+            print(f"{player_id} - {player.get_name()}")
+
+        if self.is_ready():
+            self.initialize_level()
+
+    def _handle_game_left_packet(self, packet: GameLeftPacket, player_id: str) -> None:
         self.send_game_room(packet)
+        del self.players[player_id]

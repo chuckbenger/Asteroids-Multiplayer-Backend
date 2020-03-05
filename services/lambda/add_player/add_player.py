@@ -1,42 +1,64 @@
 import json
-import inject
 import os
-from common.domain.player import Player
-from common.domain.actions.add_player import AddPlayer
-from common.adapters.sqs import SQSGameQueueAdapter
-from common.domain.queue_interface import GameQueueInterface
+from dataclasses import dataclass
+from typing import Dict, Optional
+
+from common.domain.player import Player, create_player
+from common.domain.actions import AddPlayerToQueue
+from configure import configure_inject
+
+configure_inject(os.environ['MATCH_MAKING_QUEUE_NAME'])
 
 
-def configure_inject(sqs_match_making_queue_name: str) -> None:
-
-    def config(binder: inject.Binder) -> None:
-        binder.bind(GameQueueInterface, SQSGameQueueAdapter(
-            sqs_match_making_queue_name))
-
-    inject.configure(config)
+@dataclass
+class Data:
+    name: str
 
 
-configure_inject(os.getenv('MATCH_MAKING_QUEUE_NAME'))
+def execute(event, context):
+
+    data = parse_body(event)
+
+    if data:
+        player = create_player(data.name)
+        added_to_queue = AddPlayerToQueue().execute(player)
+
+        if added_to_queue:
+            return success_response(player.player_id)
+
+    return error_response()
 
 
-@inject.autoparams("add_player")
-def execute(event, context, add_player: AddPlayer):
+def parse_body(event) -> Optional[Data]:
+    body = event.get('body')
+    if body:
+        json_data = json.loads(body)
+        name = json_data.get('name')
 
-    user_id = event['requestContext']['authorizer']['claims']['sub']
+        if name:
+            return Data(name)
 
-    if user_id:
-        print(f"{user_id} being added to Game Queue")
+    return None
 
-        player = Player(user_id)
-        was_added_to_queue = add_player.execute(player)
 
-        if was_added_to_queue:
-            return {
-                "statusCode": "200",
-                "body": json.dumps({"message": "Added to Game Queue"}),
-            }
+def success_response(player_id: str) -> Dict:
+    return {
+        "statusCode": "200",
+        "headers": {
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "Added to Game Queue",
+            "player_id": player_id
+        }),
+    }
 
+
+def error_response() -> Dict:
     return {
         "statusCode": "400",
+        "headers": {
+            "Access-Control-Allow-Origin": "*"
+        },
         "body": json.dumps({"message": "Failed to join Game Queue"}),
     }

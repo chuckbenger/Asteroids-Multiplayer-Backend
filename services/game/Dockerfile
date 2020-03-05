@@ -5,8 +5,7 @@ WORKDIR /game
 COPY ./game/requirements.txt ./
 RUN pip install -r ./requirements.txt
 COPY ./common ./common
-COPY ./game/*.py ./
-COPY ./game/templates ./templates
+COPY ./game ./
 RUN echo Starting Game Service
 ENTRYPOINT ["python"]
 CMD ["./game.py"]
