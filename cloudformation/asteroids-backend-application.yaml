@@ -384,11 +384,11 @@ Resources:
             - Name: DEBUG
               Value: False
             - Name: SECONDS_BETWEEN_QUEUE_SCANS
-              Value: 30
+              Value: 20
             - Name: MAX_GAMES
               Value: 60
             - Name: PLAYERS_PER_GAME
-              Value: 2
+              Value: 4
             - Name: MATCH_MAKING_QUEUE_NAME
               Value: MatchMakingQueue
             - Name: GAME_TABLE

@@ -52,9 +52,9 @@ def success_response(game_id: str) -> Dict:
 
 def error_response() -> Dict:
     return {
-        "statusCode": "400",
+        "statusCode": "200",
         "headers": {
             "Access-Control-Allow-Origin": "*"
         },
-        "body": json.dumps({"message": "Could not find game"}),
+        "body": json.dumps({"message": "Waiting for game"}),
     }

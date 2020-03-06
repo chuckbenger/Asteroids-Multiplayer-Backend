@@ -8,7 +8,7 @@ from common.domain.actions import GetGame, UpdateGame
 from server.identity import IdentityManager, GameIdentity
 from server.game_rooms import GameRooms
 from server import GameRoomMessenger, GameMessage
-from server.packets.packet import Packet
+from server.packets import Packet, GameLeftPacket
 from server.packets import decode_packet
 
 
@@ -70,6 +70,10 @@ class GameServerNamespace(Namespace):
                 return True
 
         return False
+
+    def on_disconnect(self):
+        identity = self.identity.get_identity()
+        self.on_leave(GameLeftPacket(identity.player_id, identity.game_id).encode())
 
     def on_leave(self, data: Dict):
         identity = self.identity.get_identity()

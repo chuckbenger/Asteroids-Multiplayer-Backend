@@ -28,7 +28,8 @@ class MatchMakerApp:
                     self.config.players_per_game - len(match))
 
                 match += players
-                if len(match) >= self.config.players_per_game:
+                if len(match) >= self.config.players_per_game or \
+                        len(match) >= 2:
                     game = self.setup_match(match)
                     logging.info(f"New Game {game}")
                     match = []
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting up match making service")
     logging.info(conf)
-   
+
     configure_inject(conf)
 
     match_maker = MatchMakerApp(conf)

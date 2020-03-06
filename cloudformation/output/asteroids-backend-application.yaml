@@ -195,7 +195,7 @@ Resources:
             - Arn
       Handler: get_game.execute
       Runtime: python3.7
-      CodeUri: s3://sam.chuckbenger/cc90343c94b7a3fed046520d9f3d64fa
+      CodeUri: s3://sam.chuckbenger/3e95d89e1e798cf384c6049d3a5b15d2
       Description: Get the game id for a player
       MemorySize: 128
       Timeout: 30
@@ -218,7 +218,7 @@ Resources:
       LayerName: VendorLayer
       Content:
         S3Bucket: sam.chuckbenger
-        S3Key: 2e9921f55a693269c57b1a07bc8bbf0c
+        S3Key: e27fa483d078ab62fa9058efee48875b
   GameCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -363,11 +363,11 @@ Resources:
         - Name: DEBUG
           Value: false
         - Name: SECONDS_BETWEEN_QUEUE_SCANS
-          Value: 30
+          Value: 20
         - Name: MAX_GAMES
           Value: 60
         - Name: PLAYERS_PER_GAME
-          Value: 2
+          Value: 4
         - Name: MATCH_MAKING_QUEUE_NAME
           Value: MatchMakingQueue
         - Name: GAME_TABLE

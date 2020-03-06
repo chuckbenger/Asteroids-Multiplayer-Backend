@@ -46,11 +46,31 @@ def random_color() -> str:
 
 def generate_asteroid_field(size: int) -> List[Asteroid]:
     asteroids = []
+
+    _maxX = 1024
+    _minX = 0
+    _maxY = 1024
+    _minY = 0
+
+    leftRight = random.randint(1, 50)
+
+    if leftRight <= 25:
+        _maxX = (_maxX // 2) - (_maxX // 10)
+    else:
+        _minX = (_maxX // 2) + (_maxX // 10)
+
+    topBottom = random.randint(1, 50)
+
+    if topBottom <= 25:
+        _maxY = (_maxY // 2) - (_maxY // 10)
+    else:
+        _minY = (_maxY // 2) + (_maxY // 10)
+
     for i in range(size):
         asteroid = Asteroid(
             id=i,
-            x=random.randint(0, 400),
-            y=random.randint(0, 500),
+            x=random.randint(_minX, _maxX),
+            y=random.randint(_minY, _maxY),
             angle=random.randint(0, 360) * (math.pi / 180),
             sides=6,
             size=random.randint(20, 80),
