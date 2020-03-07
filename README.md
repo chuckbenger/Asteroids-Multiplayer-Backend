@@ -5,7 +5,7 @@ Python backend for the Asteroids Multiplayer backend. The goal of this was to ex
 ## Architecture 
 
 Here is how the architecture of the application is setup
-![Architecture]("Asteroids App.png")
+![Architecture]("/Asteroids App.png")
 
 ## Authors
 
