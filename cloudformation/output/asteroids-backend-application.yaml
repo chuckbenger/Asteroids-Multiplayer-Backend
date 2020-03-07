@@ -218,7 +218,7 @@ Resources:
       LayerName: VendorLayer
       Content:
         S3Bucket: sam.chuckbenger
-        S3Key: e27fa483d078ab62fa9058efee48875b
+        S3Key: fc13cc7b7f67166d837bd1a05f39ef33
   GameCluster:
     Type: AWS::ECS::Cluster
     Properties:

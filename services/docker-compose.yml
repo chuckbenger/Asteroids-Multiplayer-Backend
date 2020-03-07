@@ -1,13 +1,13 @@
 version: "3"
 
 services:
-  match_making:
-    build:
-      context: ./
-      dockerfile: ./matchmaking/Dockerfile
-    volumes:
-      - ~/.aws/credentials:/root/.aws/credentials:ro
-    env_file: ./matchmaking/service.env
+  # match_making:
+  #   build:
+  #     context: ./
+  #     dockerfile: ./matchmaking/Dockerfile
+  #   volumes:
+  #     - ~/.aws/credentials:/root/.aws/credentials:ro
+  #   env_file: ./matchmaking/service.env
 
 
   game_service:

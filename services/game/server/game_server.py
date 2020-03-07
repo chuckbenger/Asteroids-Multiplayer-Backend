@@ -73,7 +73,9 @@ class GameServerNamespace(Namespace):
 
     def on_disconnect(self):
         identity = self.identity.get_identity()
-        self.on_leave(GameLeftPacket(identity.player_id, identity.game_id).encode())
+        if identity:
+            self.on_leave(GameLeftPacket(
+                identity.player_id, identity.game_id).encode())
 
     def on_leave(self, data: Dict):
         identity = self.identity.get_identity()

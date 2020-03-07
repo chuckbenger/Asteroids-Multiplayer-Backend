@@ -1,7 +1,6 @@
 import random
+import datetime
 from typing import Dict, List
-from flask_socketio import emit
-
 from server.asteroid import Asteroid, generate_asteroid_field
 from server.player import Player
 from server import GameRoomMessenger, GameMessage
@@ -16,6 +15,7 @@ from server.packets import Packet, \
     PlayerRespawnPacket,\
     PlayerStatsUpdatePacket
 
+GAME_START_FORCE_DELAY = datetime.timedelta(seconds=10)
 
 class GameRoom():
     def __init__(self, game_id: str, allowed_players: List[str],
@@ -28,6 +28,7 @@ class GameRoom():
         self.initialized = False
         self.score = 0
         self.level = 1
+        self.force_start_time = datetime.datetime.now() + GAME_START_FORCE_DELAY
 
     def send_game_room(self, packet: Packet) -> None:
         self.messenger.send_game_room(packet, self.game_id)
@@ -44,6 +45,11 @@ class GameRoom():
         self.generate_asteroid_field()
         self.send_game_room(GameInitPacket(
             list(self.asteroids.values()), self.level))
+
+
+    def should_force_start_game(self) -> bool:
+        if not self.initialized:
+            return datetime.datetime.now() > self.force_start_time
 
     def is_ready(self) -> bool:
         return self.all_players_joined()
@@ -102,6 +108,12 @@ class GameRoom():
 
     def _handle_game_join_packet(self, packet: GameJoinPacket) -> None:
         self.send_game_room(packet)
+        print("HANDLING GAME JOIN")
+
+        if self.players.get(packet.player_id):
+            if self.should_force_start_game():
+                self.initialize_level()
+            return
 
         for player_id, player in self.players.items():
             self.send_player(GameJoinPacket(
@@ -109,7 +121,7 @@ class GameRoom():
 
         player = Player(packet.player_id, packet.player_name, packet.color)
 
-        self.players[packet.player_id]=player
+        self.players[packet.player_id] = player
         for player_id, player in self.players.items():
             print(f"{player_id} - {player.get_name()}")
 
