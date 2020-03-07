@@ -5,8 +5,7 @@ Python backend for the Asteroids Multiplayer backend. The goal of this was to ex
 ## Architecture 
 
 Here is how the architecture of the application is setup
-![Architecture]
-(https://github.com/tkblackbelt/Asteroids-Multiplayer-Backend/raw/master/Asteroids%20App.png)
+![Image of Yaktocat](https://octodex.github.com/images/yaktocat.png)
 
 ## Authors
 
